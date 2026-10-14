@@ -40,7 +40,8 @@ Notes:
 - The script clones dependency repos into `/tmp/20k-v6-work`.
 - The script generates and stores synthetic data in:
   - `generated_data/consortium_signal_v1/`
-- Age values are normalized to realistic adult years (`40-90`).
+- Age values stay in days from birth, as the BEACH model defines them, pulled into an adult range (`40-90` years) where the factory produced something implausible.
+- The run is reproducible: `datavalgen generate --seed` (datavalgen v0.4.5 or later) and the generator's own `--seed` (default `20260323`) fix every random draw. The script pins `datavalgen` and `datavalgen-model-beach` to known refs (`DATAVALGEN_REF`, `DATAVALGEN_BEACH_REF`) instead of reusing whatever an earlier clone left behind.
 - `patient_overall_stage` is regenerated from TNM to keep staging combinations clinically coherent.
 - The script always shuts infra down, even on failure (trap cleanup).
 - The script prunes Docker cache and unused images/containers after each run by default.

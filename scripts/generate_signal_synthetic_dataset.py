@@ -144,8 +144,14 @@ S_RISK = {
 
 NODE_NAMES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]
 CENTRES = ["isala", "radboud", "umcg", "maastricht", "erasmus", "amc"]
+# The BEACH model stores age_at_diagnosis as days from birth (at least 18 years). The
+# generator keeps that unit and only pulls implausible values into an adult range.
+DAYS_PER_YEAR = 365.25
 ADULT_AGE_MIN = 40
 ADULT_AGE_MAX = 90
+ADULT_AGE_MIN_DAYS = int(ADULT_AGE_MIN * DAYS_PER_YEAR)
+ADULT_AGE_MAX_DAYS = int(ADULT_AGE_MAX * DAYS_PER_YEAR)
+MAX_AGE_DAYS = int(120 * DAYS_PER_YEAR)
 
 
 @dataclass
@@ -244,9 +250,9 @@ def _assert_dataset_quality(df: pd.DataFrame) -> None:
     ages = pd.to_numeric(df["age_at_diagnosis"], errors="coerce")
     if ages.isna().any():
         raise RuntimeError("age_at_diagnosis contains non-numeric values")
-    if (ages < ADULT_AGE_MIN).any() or (ages > 120).any():
-        bad = int(((ages < ADULT_AGE_MIN) | (ages > 120)).sum())
-        raise RuntimeError(f"age_at_diagnosis out of expected bounds in {bad} rows")
+    if (ages < ADULT_AGE_MIN_DAYS).any() or (ages > MAX_AGE_DAYS).any():
+        bad = int(((ages < ADULT_AGE_MIN_DAYS) | (ages > MAX_AGE_DAYS)).sum())
+        raise RuntimeError(f"age_at_diagnosis (days) out of expected bounds in {bad} rows")
 
     metastatic = df["patient_m_stage"].isin(["M1", "M1a", "M1b", "M1c"])
     stage4 = df["patient_overall_stage"].isin(["IVA", "IVB"])
@@ -270,7 +276,7 @@ def _run(cmd: list[str]) -> None:
         )
 
 
-def _datavalgen_generate(num_rows: int, output_csv: Path) -> None:
+def _datavalgen_generate(num_rows: int, output_csv: Path, seed: int) -> None:
     _run(
         [
             sys.executable,
@@ -283,6 +289,8 @@ def _datavalgen_generate(num_rows: int, output_csv: Path) -> None:
             str(num_rows),
             "-o",
             str(output_csv),
+            "--seed",
+            str(seed),
             "--force",
         ]
     )
@@ -316,15 +324,19 @@ def _inject_signal(
     out["patient_identifier"] = [f"PT_{attempt:02d}_{i:06d}" for i in range(n)]
     out["centre"] = _balanced_centres(n, rng)
 
-    # Normalize age to adult years for realism in clinical review.
-    age_years = pd.to_numeric(out["age_at_diagnosis"], errors="coerce")
-    invalid_age = age_years.isna() | (age_years < ADULT_AGE_MIN) | (age_years > ADULT_AGE_MAX)
+    # Keep age in days from birth, as the BEACH model defines it, and only pull
+    # implausible values into an adult range (40-90 years, expressed in days).
+    age_days = pd.to_numeric(out["age_at_diagnosis"], errors="coerce")
+    invalid_age = (
+        age_days.isna() | (age_days < ADULT_AGE_MIN_DAYS) | (age_days > ADULT_AGE_MAX_DAYS)
+    )
     if invalid_age.any():
-        age_years.loc[invalid_age] = rng.integers(
-            ADULT_AGE_MIN, ADULT_AGE_MAX + 1, size=int(invalid_age.sum())
+        age_days.loc[invalid_age] = rng.integers(
+            ADULT_AGE_MIN_DAYS, ADULT_AGE_MAX_DAYS + 1, size=int(invalid_age.sum())
         )
-    age_years = age_years.round().astype(int)
-    out["age_at_diagnosis"] = age_years
+    age_days = age_days.round().astype(int)
+    out["age_at_diagnosis"] = age_days
+    age_years = age_days / DAYS_PER_YEAR
 
     out = _enforce_clinical_consistency(out, rng)
 
@@ -524,7 +536,7 @@ def main() -> None:
             cfg = signal_schedule[min(attempt, len(signal_schedule) - 1)]
             raw_path = tmp_dir / f"raw_{attempt:02d}.csv"
 
-            _datavalgen_generate(args.num_subjects, raw_path)
+            _datavalgen_generate(args.num_subjects, raw_path, seed=args.seed + attempt)
             raw_df = pd.read_csv(raw_path)
 
             rng = np.random.default_rng(args.seed + 17_729 * (attempt + 1))

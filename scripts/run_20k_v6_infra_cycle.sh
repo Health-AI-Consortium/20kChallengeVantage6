@@ -144,6 +144,11 @@ fi
 INFRA_DIR="$WORKDIR/v6-infrastructure-sh/infrastructure"
 DATAVALGEN_DIR="$WORKDIR/datavalgen"
 DATAVALGEN_BEACH_DIR="$WORKDIR/datavalgen-model-beach"
+# Pinned so a reused work directory cannot drift from what this script was tested with.
+# datavalgen: a release tag; its main branch carries version 0.0.0, which the beach model's
+# requirement refuses. The generate --seed option this script relies on exists from v0.4.5.
+DATAVALGEN_REF="${DATAVALGEN_REF:-v0.4.5}"
+DATAVALGEN_BEACH_REF="${DATAVALGEN_BEACH_REF:-11abae69b512c09ce153ece0f00a2768088340fe}"
 
 NODES_ENV="$WORKDIR/20kchallenge_nodes_${NODE_COUNT}.env"
 COLLAB_NAME="challenge-20k-synth-${NODE_COUNT}n"
@@ -207,11 +212,21 @@ clone_if_missing() {
   fi
 }
 
+checkout_ref() {
+  local repo_url="$1"
+  local target_dir="$2"
+  local ref="$3"
+  clone_if_missing "$repo_url" "$target_dir"
+  echo "[info] checking out $ref in $target_dir"
+  git -C "$target_dir" fetch --quiet origin "$ref"
+  git -C "$target_dir" checkout --quiet --detach FETCH_HEAD
+}
+
 echo "[step] cloning dependency repos into $WORKDIR"
 mkdir -p "$WORKDIR"
 clone_if_missing "https://github.com/mdw-nl/v6-infrastructure-sh.git" "$WORKDIR/v6-infrastructure-sh"
-clone_if_missing "https://github.com/mdw-nl/datavalgen.git" "$DATAVALGEN_DIR"
-clone_if_missing "https://github.com/MaastrichtU-CDS/datavalgen-model-beach.git" "$DATAVALGEN_BEACH_DIR"
+checkout_ref "https://github.com/mdw-nl/datavalgen.git" "$DATAVALGEN_DIR" "$DATAVALGEN_REF"
+checkout_ref "https://github.com/MaastrichtU-CDS/datavalgen-model-beach.git" "$DATAVALGEN_BEACH_DIR" "$DATAVALGEN_BEACH_REF"
 
 if [[ ! -d "$ALGO_DIR" ]]; then
   echo "[error] 20k challenge algorithm directory not found: $ALGO_DIR" >&2
