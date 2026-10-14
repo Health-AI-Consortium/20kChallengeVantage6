@@ -1,4 +1,4 @@
-FROM harbor2.vantage6.ai/infrastructure/algorithm-base
+FROM ghcr.io/vantage6/infrastructure/algorithm-base:4.15
 
 ARG PKG_NAME="logreg_challenge_20k"
 

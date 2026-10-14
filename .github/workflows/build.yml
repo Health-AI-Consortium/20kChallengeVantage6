@@ -1,0 +1,96 @@
+name: Build And Push
+
+on:
+  push:
+    tags:
+      - "release/v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_REPOSITORY: 20klogregchallenge
+  ALGORITHM_DIR: my-fl-project/20kLogRegChallenge
+
+jobs:
+  build-push-and-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Extract version
+        shell: bash
+        run: |
+          VERSION_TAG="${GITHUB_REF#refs/tags/release/}"
+          PACKAGE_VERSION="${VERSION_TAG#v}"
+          echo "VERSION_TAG=$VERSION_TAG" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Sync setup.py version to tag
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          path = pathlib.Path("${{ env.ALGORITHM_DIR }}/setup.py")
+          content = path.read_text(encoding="utf-8")
+          package_version = "${{ env.PACKAGE_VERSION }}"
+
+          pattern = r'(version\s*=\s*")[^"]+(")'
+          updated, count = re.subn(
+              pattern,
+              rf'\g<1>{package_version}\g<2>',
+              content,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("Unable to update version in setup.py")
+
+          path.write_text(updated, encoding="utf-8")
+          print(f"setup.py version set to {package_version}")
+          PY
+
+      - name: Normalize owner and image name
+        shell: bash
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER_LOWER="$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "OWNER_LOWER=$OWNER_LOWER" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=${REGISTRY}/${OWNER_LOWER}/${IMAGE_REPOSITORY}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4
+        with:
+          context: ${{ env.ALGORITHM_DIR }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.VERSION_TAG }}
+
+      - name: Print image reference
+        run: |
+          echo "Version: ${{ env.VERSION_TAG }}"
+          echo "Image: ${{ env.IMAGE_NAME }}:${{ env.VERSION_TAG }}"
+          echo "Digest: ${{ steps.docker_build.outputs.digest }}"
+          echo "Pinned image: ${{ env.IMAGE_NAME }}@${{ steps.docker_build.outputs.digest }}"
+
+      - name: Print regex for Vantage6 allow-list
+        shell: bash
+        env:
+          DIGEST: ${{ steps.docker_build.outputs.digest }}
+        run: |
+          REGISTRY_REGEX="${REGISTRY//./\\.}"
+          echo "# https://github.com/${GITHUB_REPOSITORY}/tree/${VERSION_TAG}"
+          echo "- ^${REGISTRY_REGEX}/${OWNER_LOWER}/${IMAGE_REPOSITORY}@${DIGEST}$"

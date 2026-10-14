@@ -44,7 +44,7 @@ KEEP_REGISTRY="false"
 UI_ENABLED="${UI_ENABLED:-false}"
 UI_PORT="${UI_PORT:-80}"
 PRUNE_DOCKER="false"
-DOCKER_REGISTRY="${DOCKER_REGISTRY:-harbor2.vantage6.ai/infrastructure}"
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io/vantage6/infrastructure}"
 TASK_TIMEOUT_S="${TASK_TIMEOUT_S:-1800}"
 
 while [[ "$#" -gt 0 ]]; do
