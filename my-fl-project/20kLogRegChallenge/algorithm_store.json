@@ -39,6 +39,11 @@
           "name": "rel_tol",
           "type": "float",
           "description": "Relative convergence tolerance"
+        },
+        {
+          "name": "organization_ids",
+          "type": "organization_list",
+          "description": "Organizations to include; every organization in the collaboration when omitted"
         }
       ]
     },

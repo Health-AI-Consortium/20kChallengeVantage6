@@ -87,6 +87,8 @@ python "/path/to/20kLogRegChallenge/run_on_v6_network.py"
 
 **Configuration:** Edit the script to change server URL, credentials, or ADMM parameters (`input_params`).
 
+**Running on a subset of sites:** by default the central function involves every organization in the collaboration. Add `"organization_ids": [3]` to the `kwargs` in `input_params` to run on the listed organizations only, for example to test a single node. Every organization that takes part needs a public key registered on the server, because the subtask inputs are encrypted for them.
+
 **Output:** Prints task status and, when complete, coefficients, patient counts, accuracy, AUC, and calibration.
 
 ---
