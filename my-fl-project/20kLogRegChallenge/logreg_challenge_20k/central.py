@@ -218,19 +218,33 @@ def central_function(
     lambda_: float = 0.0,
     abs_tol: float = 1e-12,
     rel_tol: float = 1e-12,
-    logging: bool = True
+    logging: bool = True,
+    organization_ids: List[int] | None = None,
 ) -> Dict[str, Any]:
     """
     Central ADMM logistic regression.
 
-    This function orchestrates the full ADMM procedure across all nodes and
-    returns the final global coefficients plus a small convergence history.
+    This function orchestrates the full ADMM procedure across the participating
+    nodes and returns the final global coefficients plus a small convergence
+    history. By default every organization in the collaboration takes part;
+    pass ``organization_ids`` to restrict the run to a subset, for example a
+    single site during testing.
     """
     # ------------------------------------------------------------------
     # 1. Determine participating organizations
     # ------------------------------------------------------------------
     organizations = client.organization.list()
-    org_ids = [organization.get("id") for organization in organizations]
+    member_ids = [organization.get("id") for organization in organizations]
+    if organization_ids:
+        unknown = sorted(set(organization_ids) - set(member_ids))
+        if unknown:
+            raise ValueError(
+                f"organization_ids {unknown} are not members of this collaboration "
+                f"(members: {member_ids})"
+            )
+        org_ids = list(organization_ids)
+    else:
+        org_ids = member_ids
     num_sites = len(org_ids)
 
     if num_sites == 0:
